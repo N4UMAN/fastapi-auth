@@ -1,11 +1,11 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 
-CREATE TYPE token_type AS ENUM (
+CREATE TYPE IF NOT EXISTS token_type AS ENUM (
     'refresh',
     'email_verification',
     'password_reset'
-)
+);
 
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,4 +26,4 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 
 
 CREATE INDEX idx_junk_tokens ON auth_tokens(expires_at, is_revoked)
-WHERE is_revoked = TRUE OR expires_at < NOW();
+WHERE is_revoked = TRUE

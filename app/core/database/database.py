@@ -2,7 +2,6 @@ from psycopg import AsyncConnection
 from psycopg_pool import AsyncConnectionPool
 from fastapi import Depends, Request
 from typing import Annotated
-from config import settings
 
 
 async def get_db(request: Request):

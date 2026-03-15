@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi_mail import ConnectionConfig
 from pydantic import AnyUrl, EmailStr, computed_field
 from pydantic_core import MultiHostUrl
@@ -33,7 +35,6 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Mail Settings
     MAIL_USERNAME: str
@@ -66,6 +67,18 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"
     )
+
+    @computed_field
+    @property
+    def TOKEN_TTL_CONFIG(self) -> dict:
+        """Token TTL configuration for different token types"""
+        from auth.schemas.auth_token_schema import TokenType
+
+        return {
+            TokenType.EMAIL_VERIFICATION: timedelta(hours=2),
+            TokenType.PASSWORD_RESET: timedelta(minutes=30),
+            TokenType.REFRESH: timedelta(days=7),
+        }
 
 
 settings = Settings()
