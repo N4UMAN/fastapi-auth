@@ -7,6 +7,8 @@ from core.logger import logger
 from core.database.database import DBConn
 from psycopg import AsyncConnection
 from bcrypt import hashpw, checkpw, gensalt
+from auth.schemas.auth_schema import AuthenticateUser
+from auth.services.user_service import user_service_dependancy
 
 
 class AuthTokenService():
@@ -29,3 +31,29 @@ class AuthTokenService():
             return checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
         except ValueError:
             return False
+
+    async def authenticate_user(self, user: AuthenticateUser, user_service: user_service_dependancy):
+        """
+        Fetches user by email, raises Exception if user not found or credentials invalid.
+        """
+        try:
+            db_user = await user_service.get_user_by_email(user.email)
+
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        except RuntimeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e)
+            )
+
+        if not self._verify_password(user.password, db_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Email or Password"
+            )
+
+        return db_user

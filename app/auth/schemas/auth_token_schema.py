@@ -5,6 +5,7 @@ from core.config import settings
 
 
 class TokenType(Enum):
+    ACCESS = "access"
     REFRESH = "refresh"
     EMAIL_VERIFICATION = 'email_verification'
     PASSWORD_RESET = 'password_reset'
@@ -35,3 +36,13 @@ class AuthTokenCreate(BaseModel):
             ttl = settings.TOKEN_TTL_CONFIG.get(values.get('token_type')) or timedelta(minutes=15)
             values['expires_at'] = now + ttl
         return values
+
+
+class AuthRefreshRequest(BaseModel):
+    raw_token: str
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"

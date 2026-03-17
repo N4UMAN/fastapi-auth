@@ -34,7 +34,25 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    @computed_field
+    @property
+    def TOKEN_TTL_CONFIG(self) -> dict:
+        """Token TTL configuration for different token types"""
+        from auth.schemas.auth_token_schema import TokenType
+
+        return {
+            TokenType.EMAIL_VERIFICATION: timedelta(hours=2),
+            TokenType.PASSWORD_RESET: timedelta(minutes=30),
+            TokenType.REFRESH: timedelta(days=7),
+            TokenType.ACCESS: timedelta(minutes=30)
+        }
+
+    # Load from .env file
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
     # Mail Settings
     MAIL_USERNAME: str
@@ -60,25 +78,6 @@ class Settings(BaseSettings):
             MAIL_SSL_TLS=self.MAIL_SSL_TLS,
             USE_CREDENTIALS=True
         )
-        raise NotImplementedError
-    # Load from .env file
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
-
-    @computed_field
-    @property
-    def TOKEN_TTL_CONFIG(self) -> dict:
-        """Token TTL configuration for different token types"""
-        from auth.schemas.auth_token_schema import TokenType
-
-        return {
-            TokenType.EMAIL_VERIFICATION: timedelta(hours=2),
-            TokenType.PASSWORD_RESET: timedelta(minutes=30),
-            TokenType.REFRESH: timedelta(days=7),
-        }
 
 
 settings = Settings()

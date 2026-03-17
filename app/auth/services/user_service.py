@@ -1,8 +1,12 @@
-from psycopg import AsyncConnection
-from psycopg.errors import UniqueViolation
-from pydantic import UUID4
+from typing import Annotated
 
-from app.auth.schemas.user_schema import UserCreate
+from fastapi import Depends
+from psycopg import AsyncConnection
+from psycopg.errors import UniqueViolation, NoDataFound
+from psycopg.rows import dict_row
+from pydantic import UUID4, EmailStr
+
+from app.auth.schemas.user_schema import UserCreate, UserInDB
 
 
 class UserService():
@@ -35,3 +39,48 @@ class UserService():
             raise ValueError(f"Email {user.email} already exists")
         except Exception as e:
             raise RuntimeError(f"Database error: {e}")
+
+    async def get_user_by_email(self, email: EmailStr):
+        """
+        get user by email, if not found, raise exception
+        """
+
+        query = "SELECT * from users WHERE email ILIKE %s"
+
+        try:
+            async with self.conn.cursor(row_factory=dict_row) as curr:
+                await curr.execute(query, (email,))
+                user = await curr.fetchone()
+        except Exception as e:
+            raise RuntimeError(f"Database error: {e}")
+
+        if user is None:
+            raise ValueError(f"User with email {email} not found")
+
+        return UserInDB.model_validate(user)
+
+    async def get_user_by_id(self, user_id: UUID4):
+        """
+        Fetches a user by ID, raises ValueError if not found.
+        """
+
+        query = "SELECT * from users WHERE id = %s"
+
+        try:
+            async with self.conn.cursor(row_factory=dict_row) as curr:
+                await curr.execute(query, (user_id, ))
+                user = await curr.fetchone()
+        except Exception as e:
+            raise RuntimeError(f"Database error: {e}")
+
+        if user is None:
+            raise ValueError(f"User not found")
+
+        return UserInDB.model_validate(user)
+
+
+def get_user_service(conn):
+    return UserService(conn)
+
+
+user_service_dependancy = Annotated[UserService, Depends(get_user_service)]
