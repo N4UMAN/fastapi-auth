@@ -2,11 +2,12 @@ from typing import Annotated
 
 from fastapi import Depends
 from psycopg import AsyncConnection
-from psycopg.errors import UniqueViolation, NoDataFound
+from psycopg.errors import UniqueViolation
 from psycopg.rows import dict_row
 from pydantic import UUID4, EmailStr
 
 from app.auth.schemas.user_schema import UserCreate, UserInDB
+from app.core.database.database import DBConn
 
 
 class UserService():
@@ -79,7 +80,7 @@ class UserService():
         return UserInDB.model_validate(user)
 
 
-def get_user_service(conn):
+def get_user_service(conn: DBConn) -> UserService:
     return UserService(conn)
 
 

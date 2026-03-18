@@ -1,28 +1,43 @@
 from fastapi import APIRouter, Request, HTTPException, status
-from auth.services.token_service import token_dependancy
-from auth.schemas.auth_token_schema import AuthTokenResponse, AuthRefreshRequest
+from app.auth.schemas.auth_schema import AuthenticateUser, SignupPayload
+from app.auth.services.token_service import token_dependency
+from app.auth.schemas.auth_token_schema import AuthTokenResponse, AuthRefreshRequest
+from app.auth.services.auth_service import auth_dependency
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+@auth_router.post('/signup')
+async def signup(payload: SignupPayload, request: Request, auth_service: auth_dependency):
+    return await auth_service.register_user(payload, request)
+
+
+@auth_router.post('/login', response_model=AuthTokenResponse)
+async def login(payload: AuthenticateUser, auth_service: auth_dependency):
+    access_token, refresh_token = await auth_service.authenticate_user(payload)
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token
+    }
 
 
 @auth_router.post('/refresh', response_model=AuthTokenResponse)
 async def rotate_token(
     body: AuthRefreshRequest,
-    service: token_dependancy
+    service: token_dependency
 ):
     try:
-        user_id, new_refresh_token = await service.rotate_refresh_token(
+        access_token, refresh_token = await service.rotate_access_token(
             body.raw_token
         )
 
-        if not new_refresh_token:
+        if not refresh_token:
             raise Exception
-
-        access_token = service.create_access_token({"sub": str(user_id)})
 
         return {
             "access_token": access_token,
-            "refresh_token": new_refresh_token
+            "refresh_token": refresh_token
         }
 
     except Exception:

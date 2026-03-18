@@ -1,7 +1,7 @@
 from pydantic import BaseModel, UUID4, model_validator
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from core.config import settings
+from app.core.config import settings
 
 
 class TokenType(Enum):

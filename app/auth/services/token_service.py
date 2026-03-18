@@ -7,22 +7,25 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 import hashlib
 from app.core.database.database import DBConn
-from core.config import settings
-from auth.schemas.auth_token_schema import TokenType, AuthTokenCreate
+from app.core.config import settings
+from app.auth.schemas.auth_token_schema import TokenType, AuthTokenCreate
 from psycopg import AsyncConnection
 import secrets
-from auth.services.user_service import user_service_dependancy
-from auth.schemas.user_schema import UserInDB
+from app.auth.services.user_service import user_service_dependancy
+from app.auth.schemas.user_schema import UserInDB
 
 
 class AuthTokenService:
     def __init__(self, conn: AsyncConnection):
         self.conn = conn
 
-    def _hash_token(self, token: str) -> str:
+    # --- Helpers ---
+    @staticmethod
+    def _hash_token(token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
 
-    def _generate_token_string(self, is_otp: bool = False) -> str:
+    @staticmethod
+    def _generate_token_string(is_otp: bool = False) -> str:
         """
         Returns 32-bit token string. 
         Handles generation of OTP
@@ -32,6 +35,7 @@ class AuthTokenService:
 
         return str(secrets.randbelow(10**6)).zfill(6)
 
+    @staticmethod
     def create_access_token(data: dict, expires_delta: timedelta | None = None):
         """
         Encodes a JWT access token with expiry and token type claims.
@@ -40,9 +44,10 @@ class AuthTokenService:
         to_encode = data.copy()
         expire_at = datetime.now(timezone.utc) + (expires_delta or settings.TOKEN_TTL_CONFIG.get(TokenType.ACCESS))
 
-        to_encode.update({"exp": expire_at, "type": TokenType.ACCESS})
+        to_encode.update({"exp": expire_at, "type": TokenType.ACCESS.value})
         return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
+    # --- Service Methods ---
     async def create_token(
         self,
         user_id: UUID4,
@@ -132,20 +137,36 @@ class AuthTokenService:
 
             return token_row['user_id']
 
-    async def rotate_refresh_token(self, raw_token, token_type: TokenType = TokenType.REFRESH):
+    async def rotate_access_token(self, raw_token, token_type: TokenType = TokenType.REFRESH):
         """
-        Verifies and revokes token before generating a new token.
+        Verifies and revokes token before generating new refresh and access tokens.
         Returns raw token.
         """
         user_id = await self.verify_token(raw_token, token_type)
 
-        token = await self.create_token(
+        refresh_token = await self.create_token(
             user_id,
             token_type,
             False
         )
+        access_token = self.create_access_token({"sub": str(user_id)})
 
-        return (user_id, token)
+        return (access_token, refresh_token)
+
+    async def grant_access_token(self, user_id):
+        """
+        Grants access + refresh token on signin
+        """
+
+        refresh_token = await self.create_token(
+            user_id,
+            TokenType.REFRESH,
+            False
+        )
+
+        access_token = self.create_access_token({"sub": str(user_id)})
+
+        return (access_token, refresh_token)
 
 
 def get_auth_token_service(conn: DBConn) -> AuthTokenService:
@@ -175,5 +196,5 @@ async def get_current_user(token: Annotated[str, Depends(OAuth2PasswordBearer(to
 
     return user
 
-token_dependancy = Annotated[AuthTokenService, Depends(get_auth_token_service)]
+token_dependency = Annotated[AuthTokenService, Depends(get_auth_token_service)]
 CurrentUser = Annotated[UserInDB, Depends(get_current_user)]
