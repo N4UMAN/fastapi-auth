@@ -23,6 +23,10 @@ file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCou
 file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(formatter)
 
+if Path.exists(LOG_FILE):
+    file_handler.doRollover()
+
+
 # Logger
 logger = logging.getLogger("app_logger")
 

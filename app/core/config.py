@@ -80,6 +80,7 @@ class Settings(BaseSettings):
             USE_CREDENTIALS=True
         )
 
+    # Redis Settings
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
 
@@ -88,10 +89,21 @@ class Settings(BaseSettings):
     def redis_url(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
 
+    REDIS_MAX_RETRIES: int = 3
+
     # Auth Settings
     SIGNUP_LIMIT_IP: int = 3
-    SIGNUP_LIMIT_DEVICE: int = 999
-    SIGNUP_WINDOW: int = 86400
+    SIGNUP_LIMIT_DEVICE: int = 1
+    SIGNUP_WINDOW: int = 24*60*60
+
+    LOGIN_LIMIT_IP: int = 5
+    LOGIN_LIMIT_USER: int = 5
+    LOGIN_WINDOW: int = 15*60
+
+    BACKOFF_TIME_BASE: int = 30
+    BACKOFF_TIME_MAX: int = 5*60
+
+    MAX_LOGIN_ATTEMPTS: int = 3
 
     @computed_field
     @property

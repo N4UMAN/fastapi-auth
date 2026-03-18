@@ -1,6 +1,5 @@
 from uuid import UUID
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import UUID4
 from datetime import datetime, timedelta, timezone
@@ -11,8 +10,6 @@ from app.core.config import settings
 from app.auth.schemas.auth_token_schema import TokenType, AuthTokenCreate
 from psycopg import AsyncConnection
 import secrets
-from app.auth.services.user_service import user_service_dependancy
-from app.auth.schemas.user_schema import UserInDB
 
 
 class AuthTokenService:
@@ -173,28 +170,4 @@ def get_auth_token_service(conn: DBConn) -> AuthTokenService:
     return AuthTokenService(conn)
 
 
-async def get_current_user(token: Annotated[str, Depends(OAuth2PasswordBearer(tokenUrl="/api/auth/login"))], user_service: user_service_dependancy):
-    credential_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"}
-    )
-
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id = UUID(payload.get("sub"))
-
-        if user_id is None:
-            raise credential_exception
-
-        user = await user_service.get_user_by_id(user_id)
-
-    except JWTError as e:
-        raise credential_exception
-    except ValueError:
-        raise credential_exception
-
-    return user
-
 token_dependency = Annotated[AuthTokenService, Depends(get_auth_token_service)]
-CurrentUser = Annotated[UserInDB, Depends(get_current_user)]

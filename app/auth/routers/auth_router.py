@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Request, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Request, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from app.auth.schemas.auth_schema import AuthenticateUser, SignupPayload
 from app.auth.services.token_service import token_dependency
 from app.auth.schemas.auth_token_schema import AuthTokenResponse, AuthRefreshRequest
@@ -13,8 +16,9 @@ async def signup(payload: SignupPayload, request: Request, auth_service: auth_de
 
 
 @auth_router.post('/login', response_model=AuthTokenResponse)
-async def login(payload: AuthenticateUser, auth_service: auth_dependency):
-    access_token, refresh_token = await auth_service.authenticate_user(payload)
+async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], request: Request, auth_service: auth_dependency):
+    user_data = AuthenticateUser(email=form_data.username, password=form_data.password)
+    access_token, refresh_token = await auth_service.authenticate_user(user_data, request)
 
     return {
         "access_token": access_token,

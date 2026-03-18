@@ -71,6 +71,7 @@ class UserService():
             async with self.conn.cursor(row_factory=dict_row) as curr:
                 await curr.execute(query, (user_id, ))
                 user = await curr.fetchone()
+
         except Exception as e:
             raise RuntimeError(f"Database error: {e}")
 
