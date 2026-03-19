@@ -32,9 +32,7 @@ class UserService():
         try:
             async with self.conn.cursor() as curr:
                 await curr.execute(query, params)
-                row = await curr.fetchone()
-
-                return row
+                return await curr.fetchone()
 
         except UniqueViolation:
             raise ValueError(f"Email {user.email} already exists")

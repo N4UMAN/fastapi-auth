@@ -1,6 +1,5 @@
-from uuid import UUID
 from fastapi import Depends, HTTPException, status
-from jose import JWTError, jwt
+from jose import jwt
 from pydantic import UUID4
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
@@ -9,6 +8,7 @@ from app.core.database.database import DBConn
 from app.core.config import settings
 from app.auth.schemas.auth_token_schema import TokenType, AuthTokenCreate
 from psycopg import AsyncConnection
+from psycopg.rows import dict_row
 import secrets
 
 
@@ -50,7 +50,7 @@ class AuthTokenService:
         user_id: UUID4,
         token_type: TokenType,
         is_otp: bool = False
-    ):
+    ) -> str:
         """
         Generates a secure token, hashes it for the DB, and returns the 
         raw string to be sent to the user.
@@ -78,11 +78,12 @@ class AuthTokenService:
         """
 
         async with self.conn.cursor() as cur:
-            await cur.execute(query, params)
+            try:
+                await cur.execute(query, params)
 
-            await self.conn.commit()
-
-        return raw_token
+                return raw_token
+            except Exception as e:
+                raise RuntimeError(f"Database error: {e}")
 
     async def revoke_token(
             self,
@@ -99,42 +100,38 @@ class AuthTokenService:
 
         return token_id
 
-    async def verify_token(self, raw_token: str, token_type: TokenType):
+    async def verify_token(self, raw_token: str, token_type: TokenType) -> UUID4 | None:
         """
         Checks if a token is valid, hasn't expired, and isn't revoked.
         If valid, marks it revoked (consumed) and returns the user_id.
         """
         token_hash = self._hash_token(raw_token)
 
-        # Find the token
+        # Find and revoke token
         query = """
-        SELECT id, user_id FROM auth_tokens 
+        UPDATE auth_tokens 
+        SET is_revoked = TRUE 
         WHERE token_hash = %s 
-        AND token_type = %s
+        AND token_type = %s 
         AND is_revoked = FALSE 
-        AND expires_at > NOW() 
-        FOR UPDATE;
+        AND expires_at > NOW()
+        RETURNING user_id;
         """
 
-        async with self.conn.cursor() as cur:
+        async with self.conn.cursor(row_factory=dict_row) as cur:
             try:
-                await cur.execute(query, (token_hash, str(token_type)))
+                await cur.execute(query, (token_hash, token_type.value))
                 token_row = await cur.fetchone()
 
                 if not token_row:
                     return None
 
-                # Mark token as revoked
-                update_query = "UPDATE auth_tokens SET is_revoked = TRUE WHERE id = %s"
-                await cur.execute(update_query, (token_row['id'],))
-                await self.conn.commit()
-            except Exception:
-                await self.conn.rollback()
-                raise
+                return token_row['user_id']
 
-            return token_row['user_id']
+            except Exception as e:
+                raise RuntimeError(f"Database error: {e}")
 
-    async def rotate_access_token(self, raw_token, token_type: TokenType = TokenType.REFRESH):
+    async def rotate_access_token(self, raw_token, token_type: TokenType = TokenType.REFRESH) -> tuple[str, str]:
         """
         Verifies and revokes token before generating new refresh and access tokens.
         Returns raw token.
@@ -150,7 +147,7 @@ class AuthTokenService:
 
         return (access_token, refresh_token)
 
-    async def grant_access_token(self, user_id):
+    async def grant_access_token(self, user_id) -> tuple[str, str]:
         """
         Grants access + refresh token on signin
         """
@@ -164,6 +161,20 @@ class AuthTokenService:
         access_token = self.create_access_token({"sub": str(user_id)})
 
         return (access_token, refresh_token)
+
+    async def delete_expired_tokens(self) -> int:
+        """
+        CRON JOB Function: deletes all expired tokens
+        """
+        query = "DELETE FROM auth_tokens WHERE expires_at < NOW()"
+
+        async with self.conn.cursor() as cur:
+            try:
+                await cur.execute(query)
+                return await cur.rowcount
+
+            except Exception as e:
+                raise RuntimeError(f"Database error: {e}")
 
 
 def get_auth_token_service(conn: DBConn) -> AuthTokenService:
